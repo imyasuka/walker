@@ -2919,7 +2919,7 @@ int main(int argc, char* argv[], char* envp[]) {
 	start = clock();
 	if (argc == 1) {
 		printf("WALKER\n");
-		printf("It walks.");
+		printf("It walks.\n");
 		return 0;
 	}
 	if (argc == 2) {
