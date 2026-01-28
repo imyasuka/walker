@@ -2918,7 +2918,8 @@ static inline void place_core_meth(void) {
 int main(int argc, char* argv[], char* envp[]) {
 	start = clock();
 	if (argc == 1) {
-		printf("Walker Version 0\n");
+		printf("WALKER\n");
+		printf("It walks.");
 		return 0;
 	}
 	if (argc == 2) {
