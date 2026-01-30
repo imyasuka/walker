@@ -6,8 +6,7 @@ Single pass recursive descent interpreted programming language buzzword buzzword
 {let;foo bar;bazz}
 {println;{{a} bar}}
 ```
-This prints 'bazz'
-This shows multiple things:
+This prints 'bazz'. This shows multiple things:
 1. The basic lexical unit in this language is {function;argument 1;argument 2;argument 3}, almost like in LISP. 
 2. You don't need quotation marks to use strings, that is because types are implicit and inferred based on function.
 3. Variables can have spaces, and special characters too.
