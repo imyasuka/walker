@@ -706,13 +706,6 @@ flatmaps tokens = {
 	.kill = token_kill,
 	.cmp = token_cmp
 };
-struct {
-	size_t l;
-	flatmap* t;
-} t = {
-	.l = 0,
-	.t = NULL
-};
 flatmaps libs = {
 	.len = 0,
 	.p = NULL,
@@ -760,7 +753,7 @@ static void core_funcp_place(const char* k, result (*fp)(void)) {
 	temp->k.len = checked_strlen(k);
 	temp->t = TOKEN_FUNCP;
 	temp->p.fp = fp;
-	flatmap_insert(&t.t[t.l-1], temp);	
+	flatmap_insert(&tokens.p[tokens.len-1], temp);	
 }
 
 static void meth_funcp_place(const char* k, result (*meth)(var*)) {
@@ -1132,22 +1125,6 @@ static bool f_eq(const char* s) {
 	return constrcmp(f_refcs(), (constr) {.p = (char*)s, .len = checked_strlen(s)}) == 0;
 }
 
-static void t_push(void) {
-	t.l++;
-	if (t.l == 1) t.t = checked_malloc(sizeof(flatmap));
-	else t.t = checked_realloc(t.t, sizeof(flatmap)*t.l);
-	t.t[t.l-1] = flatmap_init(token_kill, token_cmp, t.l == 1 ? 64 : 8);
-}
-
-static void t_free(void) {
-	t.l--;
-	flatmap_kill(&t.t[t.l]);
-	if (t.l)
-		t.t = checked_realloc(t.t, sizeof(flatmap)*t.l);
-	else
-		checked_free(t.t);
-}
-
 static void* flatmaps_search(flatmaps* x, void* y) {
 	nukeif(!x);
 	void* res = NULL;
@@ -1156,17 +1133,6 @@ static void* flatmaps_search(flatmaps* x, void* y) {
 		i++;
 		res = flatmap_search(&x->p[x->len-i], y);
 	} while (res == NULL && i < x->len);
-	return res;
-}
-
-static struct token* t_search(constr k) {
-	struct token* res = NULL;
-	size_t i = 0;
-	struct token key = {.k = k};
-	do {
-		i++;
-		res = flatmap_search(&t.t[t.l-i], (void*)&key);
-	} while (res == NULL && i < t.l);
 	return res;
 }
 
@@ -1216,7 +1182,7 @@ static result parse_token(void) {
 			tryor(parse_args(tempa, &newa), var_clear(&v));	
 		} else args = NULL;
 		if (v.t != TYPE_MACRO) {
-			t_push();
+			flatmaps_push(&tokens, 0);
 			flatmaps_push(&libs, 0);
 			flatmaps_push(&meths, 0);
 		}
@@ -1229,7 +1195,7 @@ static result parse_token(void) {
 		args = tempa;
 		w = temp;
 		if (v.t != TYPE_MACRO) {
-			t_free();
+			flatmaps_free(&tokens);
 			flatmaps_free(&libs);
 			flatmaps_free(&meths);
 		}
@@ -1248,7 +1214,8 @@ static result parse_token(void) {
 		f_replaces(splash[rand()%(sizeof(splash)/sizeof(char*))]);
 		ok;
 	}
-	struct token* token = t_search(f_refcs());
+	struct token key = {.k = f_refcs()};
+	struct token* token = flatmaps_search(&tokens, (void*)&key);
 	if (token == NULL) {
 		string name = f_drops();
 		if (!has_next()) {
@@ -1260,7 +1227,7 @@ static result parse_token(void) {
 		temp->k.len = name.len;
 		temp->t = TOKEN_FUNC;
 		temp->p.f = w;
-		flatmap_insert(&t.t[t.l-1], temp);
+		flatmap_insert(&tokens.p[tokens.len-1], temp);
 		ok;
 	}
 	if (token->t == TOKEN_FUNCP) {
@@ -1273,7 +1240,7 @@ static result parse_token(void) {
 		if (has_args) {
 			try(parse_args(tempa, &newa));	
 		} else args = NULL;
-		t_push();
+		flatmaps_push(&tokens, 0);
 		flatmaps_push(&libs, 0);
 		flatmaps_push(&meths, 0);
 		char* temp = w;
@@ -1284,7 +1251,7 @@ static result parse_token(void) {
 		}
 		args = tempa;
 		w = temp;
-		t_free();
+		flatmaps_free(&tokens);
 		flatmaps_free(&libs);
 		flatmaps_free(&meths);
 		if (RES == RESULT_ERROR) return RES;
@@ -1297,7 +1264,7 @@ static result parse_token(void) {
 		if (has_args) {
 			try(parse_args(tempa, &newa));	
 		} else args = NULL;
-		t_push();
+		flatmaps_push(&tokens, 0);
 		flatmaps_push(&libs, 0);
 		flatmaps_push(&meths, 0);
 		char* temp = w;
@@ -1308,7 +1275,7 @@ static result parse_token(void) {
 		}
 		args = tempa;
 		w = temp;
-		t_free();
+		flatmaps_free(&tokens);
 		flatmaps_free(&libs);
 		flatmaps_free(&meths);
 		if (RES == RESULT_ERROR) return RES;
@@ -1362,7 +1329,7 @@ static result parse_var(var* obj) {
 		var* temps = self;
 		self = obj;
 		if (v.t != TYPE_MACRO) {
-			t_push();
+			flatmaps_push(&tokens, 0);
 			flatmaps_push(&libs, 0);
 			flatmaps_push(&meths, 0);
 		}
@@ -1376,7 +1343,7 @@ static result parse_var(var* obj) {
 		self = temps;
 		w = temp;
 		if (v.t != TYPE_MACRO) {
-			t_free();
+			flatmaps_free(&tokens);
 			flatmaps_free(&libs);
 			flatmaps_free(&meths);
 		}
@@ -1413,7 +1380,7 @@ static result parse_var(var* obj) {
 		} else args = NULL;
 		var* temps = self;
 		self = obj;
-		t_push();
+		flatmaps_push(&tokens, 0);
 		flatmaps_push(&libs, 0);
 		char* temp = w;
 		w = method->p.f;
@@ -1424,7 +1391,7 @@ static result parse_var(var* obj) {
 		args = tempa;
 		self = temps;
 		w = temp;
-		t_free();
+		flatmaps_free(&tokens);
 		flatmaps_free(&libs);
 		if (RES == RESULT_ERROR) return RES;
 		ok;
@@ -1912,7 +1879,7 @@ result walker_w(void) {
 	if (has_args) {
 		try(parse_args(tempa, &newa));	
 	} else args = NULL;
-	t_push();
+	flatmaps_push(&tokens, 0);
 	flatmaps_push(&libs, 0);
 	flatmaps_push(&meths, 0);
 	char* temp = w;
@@ -1927,7 +1894,7 @@ result walker_w(void) {
 	w = temp;
 	code_start = code_temp;
 	checked_free(code.p);
-	t_free();
+	flatmaps_free(&tokens);
 	flatmaps_free(&libs);
 	flatmaps_free(&meths);
 	if (RES == RESULT_ERROR) return RES;
@@ -1982,7 +1949,8 @@ result walker_include(void) {
 
 result walker_token(void) {
 	try(parse_next());
-	struct token* token = t_search(f_refcs());
+	struct token key = {.k = f_refcs()};
+	struct token* token = flatmaps_search(&tokens, (void*)&key);
 	if (token == NULL) {
 		f_replaces("undefined");
 		ok;
@@ -2326,7 +2294,8 @@ result walker_let(void) {
 	name = f_drops();
 	tryor(parse_next(), checked_free(name.p));
 	value = f_drop();
-	struct token* token = (struct token*)t_search(constr_from(name));
+	struct token key = {.k = constr_from(name)};
+	struct token* token = flatmaps_search(&tokens, (void*)&key);
 	if (token && token->t == TOKEN_FUNCP) {
 		checked_free(name.p);
 		var_clear(&value);
@@ -2336,7 +2305,7 @@ result walker_let(void) {
 	temp->k = constr_from(name);
 	temp->t = TOKEN_VAR;
 	temp->p.v = value;
-	flatmap_insert(&t.t[t.l-1], temp);
+	flatmap_insert(&tokens.p[tokens.len-1], temp);
 	ok;
 }
 
@@ -2379,7 +2348,8 @@ result walker_fun(void) {
 		checked_free(name.p);
 		ok;
 	}
-	struct token* token = (struct token*)t_search(constr_from(name));
+	struct token key = {.k = constr_from(name)};
+	struct token* token = flatmaps_search(&tokens, (void*)&key);
 	if (token && token->t == TOKEN_FUNCP) {
 		checked_free(name.p);
 		ok;
@@ -2389,7 +2359,7 @@ result walker_fun(void) {
 	temp->k.len = name.len;
 	temp->t = TOKEN_FUNC;
 	temp->p.f = w;
-	flatmap_insert(&t.t[t.l-1], temp);
+	flatmap_insert(&tokens.p[tokens.len-1], temp);
 	ok;
 }
 
@@ -2403,7 +2373,8 @@ result walker_def(void) {
 		checked_free(name.p);
 		ok;
 	}
-	struct token* token = (struct token*)t_search(constr_from(name));
+	struct token key = {.k = constr_from(name)};
+	struct token* token = flatmaps_search(&tokens, (void*)&key);
 	if (token && token->t == TOKEN_FUNCP) {
 		checked_free(name.p);
 		ok;
@@ -2413,7 +2384,7 @@ result walker_def(void) {
 	temp->k.len = name.len;
 	temp->t = TOKEN_EXPR;
 	temp->p.e = w;
-	flatmap_insert(&t.t[t.l-1], temp);
+	flatmap_insert(&tokens.p[tokens.len-1], temp);
 	ok;
 }
 
@@ -2425,7 +2396,8 @@ result walker_mac(void) {
 		checked_free(name.p);
 		ok;
 	}
-	struct token* token = (struct token*)t_search(constr_from(name));
+	struct token key = {.k = constr_from(name)};
+	struct token* token = flatmaps_search(&tokens, (void*)&key);
 	if (token && token->t == TOKEN_FUNCP) {
 		checked_free(name.p);
 		ok;
@@ -2435,7 +2407,7 @@ result walker_mac(void) {
 	temp->k.len = name.len;
 	temp->t = TOKEN_MACRO;
 	temp->p.m = w;
-	flatmap_insert(&t.t[t.l-1], temp);
+	flatmap_insert(&tokens.p[tokens.len-1], temp);
 	ok;
 }
 
@@ -2762,7 +2734,7 @@ result meth_call(var* v) {
 			try(parse_args(tempa, &newa));	
 		} else args = NULL;
 		if (v->t != TYPE_MACRO) {
-			t_push();
+			flatmaps_push(&tokens, 0);
 			flatmaps_push(&libs, 0);
 			flatmaps_push(&meths, 0);
 		}
@@ -2775,7 +2747,7 @@ result meth_call(var* v) {
 		args = tempa;
 		w = temp;
 		if (v->t != TYPE_MACRO) {
-			t_free();
+			flatmaps_free(&tokens);
 			flatmaps_free(&libs);
 			flatmaps_free(&meths);
 		}
@@ -2966,7 +2938,7 @@ int main(int argc, char* argv[], char* envp[]) {
 	f_push();
 	flatmaps_push(&libs, 8);
 	flatmaps_push(&meths, 64);
-	t_push();
+	flatmaps_push(&tokens, 64);
 	string code;
 	code.p = NULL;
 	var newa;
@@ -2998,7 +2970,7 @@ int main(int argc, char* argv[], char* envp[]) {
 		
 	} else {
 		f_free();
-		t_free();
+		flatmaps_free(&tokens);
 		flatmaps_free(&libs);
 		flatmaps_free(&meths);
 		printf("No such option\n");
@@ -3035,6 +3007,6 @@ int main(int argc, char* argv[], char* envp[]) {
 	f_free();
 	flatmaps_free(&libs);
 	flatmaps_free(&meths);
-	t_free();
+	flatmaps_free(&tokens);
 	return 0;
 }
