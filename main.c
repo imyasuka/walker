@@ -2114,6 +2114,7 @@ again:
 		f_push();
 		goto again;
 	}
+	var_clear(f_ref());
 	ok;
 }
 
@@ -2881,13 +2882,46 @@ result meth_inc(var* v) {
 	}
 }
 
+result meth_dec(var* v) {
+	var_clear(f_ref());
+	switch(v->t) {
+		case TYPE_NONE:
+			v->t = TYPE_NUMBER;
+			v->v.n = -1.0;
+			ok;
+		case TYPE_STRING:
+			string_terminate(v->v.s);
+			double num = s_tod(v->v.s->p);
+			checked_free(v->v.s->p);
+			checked_free(v->v.s);
+			v->t = TYPE_NUMBER;
+			v->v.n = num - 1.0;
+			ok;
+		case TYPE_NUMBER:
+			v->v.n--;
+			ok;
+		case TYPE_INTEGER:
+			v->v.i--;
+			ok;
+		case TYPE_UINTEGER:
+			v->v.u--;
+			ok;
+		case TYPE_BOOLEAN:
+			v->v.b = !v->v.b;
+			ok;
+		default:
+			ok;
+	}
+	
+}
+
 __attribute__((cold))
 static inline void place_core_meth(void) {
 	meth_funcp_place("=", meth_assign);
 	// +=
 	meth_funcp_place("++", meth_inc);	
 	// -=
-	// --
+	meth_funcp_place("--", meth_dec);
 	// *=
 	// /=
 	// %=
