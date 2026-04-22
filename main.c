@@ -486,7 +486,8 @@ static void f_replaceu(size_t n);
 static char* f_refs(void);
 static void f_terminate(void);
 
-struct token {
+
+typedef struct {
 	constr k;
 	union {
 		result (*fp)(void);
@@ -504,9 +505,9 @@ struct token {
 		TOKEN_MACRO,
 		TOKEN_CODE
 	} t;
-};
+} token;
 
-struct meth {
+typedef struct {
 	constr k;
 	union {
 		result (*meth)(var*);
@@ -520,17 +521,17 @@ struct meth {
 		METHOD_EXPR,
 		METHOD_MACRO
 	} t;
-};
+} meth;
 
 int meth_cmp(void* restrict l, void* r) {
 	nukeif(!l);
 	nukeif(!r);
-	return constrcmp((*(struct meth*)l).k, (*(struct meth*)r).k);
+	return constrcmp((*(meth*)l).k, (*(meth*)r).k);
 }
 
 void meth_kill(void* x) {
 	nukeif(!x);
-	struct meth* m = x;
+	meth* m = x;
 	if (m->t != METHOD_FUNCP) {
 		checked_free(m->k.p);
 		checked_free(m);
@@ -661,7 +662,7 @@ static void flatmaps_free(flatmaps* x) {
 
 void token_kill(void* n) {
 	nukeif(!n);
-	struct token* temp = n;
+	token* temp = n;
 	if (temp->t == TOKEN_VAR) {
 		var_clear(&temp->p.v);
 	}
@@ -675,7 +676,7 @@ __attribute__((hot))
 int token_cmp(void* restrict l, void* r) {
 	nukeif(!l);
 	nukeif(!r);
-	return constrcmp((*(struct token*)l).k, (*(struct token*)r).k);
+	return constrcmp((*(token*)l).k, (*(token*)r).k);
 }
 
 struct lib {
@@ -740,14 +741,14 @@ const char* splash[] = {
 	"Too dynamic 4 U!"
 };
 
-struct token core_pool[128];
+token core_pool[128];
 size_t core_i = 0;
-struct meth core_meth_pool[128];
+meth core_meth_pool[128];
 size_t core_meth_i = 0;
 
 static void core_funcp_place(const char* k, result (*fp)(void)) {
 	nukeif(!k);
-	struct token* temp = &core_pool[core_i];
+	token* temp = &core_pool[core_i];
 	core_i++;
 	temp->k.p = (char*)k;
 	temp->k.len = checked_strlen(k);
@@ -756,14 +757,14 @@ static void core_funcp_place(const char* k, result (*fp)(void)) {
 	flatmap_insert(&tokens.p[tokens.len-1], temp);	
 }
 
-static void meth_funcp_place(const char* k, result (*meth)(var*)) {
+static void meth_funcp_place(const char* k, result (*mp)(var*)) {
 	nukeif(!k);
-	struct meth* temp = &core_meth_pool[core_meth_i];
+	meth* temp = &core_meth_pool[core_meth_i];
 	core_meth_i++;
 	temp->k.p = (char*)k;
 	temp->k.len = checked_strlen(k);
 	temp->t = METHOD_FUNCP;
-	temp->p.meth = meth;
+	temp->p.meth = mp;
 	flatmap_insert(&meths.p[meths.len-1], temp);
 }
 
@@ -1214,15 +1215,15 @@ static result parse_token(void) {
 		f_replaces(splash[rand()%(sizeof(splash)/sizeof(char*))]);
 		ok;
 	}
-	struct token key = {.k = f_refcs()};
-	struct token* token = flatmaps_search(&tokens, (void*)&key);
-	if (token == NULL) {
+	token key = {.k = f_refcs()};
+	token* t = flatmaps_search(&tokens, (void*)&key);
+	if (t == NULL) {
 		string name = f_drops();
 		if (!has_next()) {
 			checked_free(name.p);
 			ok;
 		}
-		struct token* temp = checked_malloc(sizeof(struct token));
+		token* temp = checked_malloc(sizeof(token));
 		temp->k.p = name.p;
 		temp->k.len = name.len;
 		temp->t = TOKEN_FUNC;
@@ -1230,10 +1231,10 @@ static result parse_token(void) {
 		flatmap_insert(&tokens.p[tokens.len-1], temp);
 		ok;
 	}
-	if (token->t == TOKEN_FUNCP) {
-		return token->p.fp();
+	if (t->t == TOKEN_FUNCP) {
+		return t->p.fp();
 	}
-	if (token->t == TOKEN_FUNC) {
+	if (t->t == TOKEN_FUNC) {
 		var_clear(f_ref());
 		var* tempa = args;
 		var newa;
@@ -1244,7 +1245,7 @@ static result parse_token(void) {
 		flatmaps_push(&libs, 0);
 		flatmaps_push(&meths, 0);
 		char* temp = w;
-		w = token->p.f;
+		w = t->p.f;
 		RES = parse_next();
 		if (has_args) {
 			var_clear(args);
@@ -1257,7 +1258,7 @@ static result parse_token(void) {
 		if (RES == RESULT_ERROR) return RES;
 		ok;
 	}
-	if (token->t == TOKEN_EXPR) {
+	if (t->t == TOKEN_EXPR) {
 		var_clear(f_ref());
 		var* tempa = args;
 		var newa;
@@ -1268,7 +1269,7 @@ static result parse_token(void) {
 		flatmaps_push(&libs, 0);
 		flatmaps_push(&meths, 0);
 		char* temp = w;
-		w = token->p.e;
+		w = t->p.e;
 		RES = expr_next();
 		if (has_args) {
 			var_clear(args);
@@ -1281,7 +1282,7 @@ static result parse_token(void) {
 		if (RES == RESULT_ERROR) return RES;
 		ok;
 	}
-	if (token->t == TOKEN_MACRO) {
+	if (t->t == TOKEN_MACRO) {
 		var_clear(f_ref());
 		var* tempa = args;
 		var newa;
@@ -1289,7 +1290,7 @@ static result parse_token(void) {
 			try(parse_args(tempa, &newa));	
 		} else args = NULL;
 		char* temp = w;
-		w = token->p.m;
+		w = t->p.m;
 		RES = parse_next();
 		if (has_args) {
 			var_clear(args);
@@ -1299,8 +1300,8 @@ static result parse_token(void) {
 		if (RES == RESULT_ERROR) return RES;
 		ok;
 	}
-	if (token->t == TOKEN_VAR) {
-		try(parse_var(&token->p.v));
+	if (t->t == TOKEN_VAR) {
+		try(parse_var(&t->p.v));
 		ok;
 	}
 	__builtin_unreachable();
@@ -1364,8 +1365,8 @@ static result parse_var(var* obj) {
 		var_clear(f_ref());
 		ok;
 	}
-	struct meth key = {.k = f_refcs()};
-	struct meth* method = flatmaps_search(&meths, (void*)&key);
+	meth key = {.k = f_refcs()};
+	meth* method = flatmaps_search(&meths, (void*)&key);
 	if (method == NULL) {
 		var_clear(f_ref());
 		ok;
@@ -1949,8 +1950,8 @@ result walker_include(void) {
 
 result walker_token(void) {
 	try(parse_next());
-	struct token key = {.k = f_refcs()};
-	struct token* token = flatmaps_search(&tokens, (void*)&key);
+	token key = {.k = f_refcs()};
+	token* token = flatmaps_search(&tokens, (void*)&key);
 	if (token == NULL) {
 		f_replaces("undefined");
 		ok;
@@ -2294,14 +2295,14 @@ result walker_let(void) {
 	name = f_drops();
 	tryor(parse_next(), checked_free(name.p));
 	value = f_drop();
-	struct token key = {.k = constr_from(name)};
-	struct token* token = flatmaps_search(&tokens, (void*)&key);
-	if (token && token->t == TOKEN_FUNCP) {
+	token key = {.k = constr_from(name)};
+	token* t = flatmaps_search(&tokens, (void*)&key);
+	if (t && t->t == TOKEN_FUNCP) {
 		checked_free(name.p);
 		var_clear(&value);
 		ok;
 	}
-	struct token* temp = checked_malloc(sizeof(struct token));
+	token* temp = checked_malloc(sizeof(token));
 	temp->k = constr_from(name);
 	temp->t = TOKEN_VAR;
 	temp->p.v = value;
@@ -2348,13 +2349,13 @@ result walker_fun(void) {
 		checked_free(name.p);
 		ok;
 	}
-	struct token key = {.k = constr_from(name)};
-	struct token* token = flatmaps_search(&tokens, (void*)&key);
-	if (token && token->t == TOKEN_FUNCP) {
+	token key = {.k = constr_from(name)};
+	token* t = flatmaps_search(&tokens, (void*)&key);
+	if (t && t->t == TOKEN_FUNCP) {
 		checked_free(name.p);
 		ok;
 	}
-	struct token* temp = checked_malloc(sizeof(struct token));
+	token* temp = checked_malloc(sizeof(token));
 	temp->k.p = name.p;
 	temp->k.len = name.len;
 	temp->t = TOKEN_FUNC;
@@ -2373,13 +2374,13 @@ result walker_def(void) {
 		checked_free(name.p);
 		ok;
 	}
-	struct token key = {.k = constr_from(name)};
-	struct token* token = flatmaps_search(&tokens, (void*)&key);
-	if (token && token->t == TOKEN_FUNCP) {
+	token key = {.k = constr_from(name)};
+	token* t = flatmaps_search(&tokens, (void*)&key);
+	if (t && t->t == TOKEN_FUNCP) {
 		checked_free(name.p);
 		ok;
 	}
-	struct token* temp = checked_malloc(sizeof(struct token));
+	token* temp = checked_malloc(sizeof(token));
 	temp->k.p = name.p;
 	temp->k.len = name.len;
 	temp->t = TOKEN_EXPR;
@@ -2396,13 +2397,13 @@ result walker_mac(void) {
 		checked_free(name.p);
 		ok;
 	}
-	struct token key = {.k = constr_from(name)};
-	struct token* token = flatmaps_search(&tokens, (void*)&key);
-	if (token && token->t == TOKEN_FUNCP) {
+	token key = {.k = constr_from(name)};
+	token* t = flatmaps_search(&tokens, (void*)&key);
+	if (t && t->t == TOKEN_FUNCP) {
 		checked_free(name.p);
 		ok;
 	}
-	struct token* temp = checked_malloc(sizeof(struct token));
+	token* temp = checked_malloc(sizeof(token));
 	temp->k.p = name.p;
 	temp->k.len = name.len;
 	temp->t = TOKEN_MACRO;
@@ -2412,7 +2413,7 @@ result walker_mac(void) {
 }
 
 result walker_meth(void) {
-	struct meth* key = checked_malloc(sizeof(struct meth));
+	meth* key = checked_malloc(sizeof(meth));
 	try(parse_next());
 	key->k = constr_from(f_drops());
 	if (!has_next()) {
@@ -2420,7 +2421,7 @@ result walker_meth(void) {
 		checked_free(key);
 		ok;
 	}
-	struct meth* method = flatmaps_search(&meths, (void*)key);
+	meth* method = flatmaps_search(&meths, (void*)key);
 	if (method && method->t == METHOD_FUNC) {
 		checked_free(key->k.p);
 		checked_free(key);
