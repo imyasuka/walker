@@ -1308,7 +1308,6 @@ static result parse_token(void) {
 }
 
 static result parse_var(var* obj) {
-	nukeif(!obj);
 	if (obj == NULL) {
 		var_clear(f_ref());
 		ok;
