@@ -1153,7 +1153,6 @@ static result parse_var(var* obj);
 static result expr_next(void);
 
 static result parse_args(var* prev, var* new) {
-	nukeif(!prev);
 	nukeif(!new);
 	args = new;
 	args->t = TYPE_ARRAY;
@@ -1498,14 +1497,23 @@ static void pure_next(void) {
 }
 
 static result raw_expr(int l) {
-	bool q = false;
 	double leftd, rightd;
 	long long int lefti, righti;
 	constr left;
 	while (*w != '\0') {
 		switch(*w) {
 		case '"':
-			q = !q;
+			while (*w != '\0') {
+				w++;
+				if (*w == '"') goto out;
+				if (*w == '\\') {
+					w++;
+					if (*w == '\0') ok;
+				}
+				f_pushc(*w);
+			}
+			if (*w == '\0') ok;
+			out:
 			w++;
 			if (*w == '\0') ok;
 			break;
@@ -1524,14 +1532,12 @@ static result raw_expr(int l) {
 			w++;
 			break;
 		case expropen:
-			if (q) goto base;
 			w++;
 			f_push();
 			tryor(raw_expr(9), f_sweep());
 			f_collapse();
 			break;
 		case '!':
-			if (q) goto base;
 			w++;
 			if (*w == '=') {
 				if (l < 4) {
@@ -1552,7 +1558,6 @@ static result raw_expr(int l) {
 			f_collapse();
 			break;
 		case '~':
-			if (q) goto base;
 			w++;
 			f_push();
 			tryor(raw_expr(0), f_sweep());
@@ -1560,7 +1565,6 @@ static result raw_expr(int l) {
 			f_collapse();
 			break;
 		case '*':
-			if (q) goto base;
 			leftd = f_num();
 			w++;
 			if (*w == '*') {
@@ -1581,7 +1585,6 @@ static result raw_expr(int l) {
 			f_replacen(leftd * rightd);
 			break;
 		case '/':
-			if (q) goto base;
 			leftd = f_num();
 			w++;
 			if (l < 1) {
@@ -1594,7 +1597,6 @@ static result raw_expr(int l) {
 			f_replacen(leftd / rightd);
 			break;
 		case '%':
-			if (q) goto base;
 			leftd = f_num();
 			w++;
 			if (l < 1) {
@@ -1607,7 +1609,6 @@ static result raw_expr(int l) {
 			f_replacen(fmod(leftd, rightd));
 			break;
 		case '+':
-			if (q) goto base;
 			leftd = f_num();
 			w++;
 			if (l < 2) {
@@ -1620,7 +1621,6 @@ static result raw_expr(int l) {
 			f_replacen(leftd + rightd);
 			break;
 		case '-':
-			if (q) goto base;
 			leftd = f_num();
 			w++;
 			if (l < 2) {
@@ -1633,7 +1633,6 @@ static result raw_expr(int l) {
 			f_replacen(leftd - rightd);
 			break;
 		case '=':
-			if (q) goto base;
 			w++;
 			if (*w == '<') {
 				goto lessoreq;
@@ -1652,7 +1651,6 @@ static result raw_expr(int l) {
 			checked_free(left.p);
 			break;
 		case '<':
-			if (q) goto base;
 			w++;
 			if (*w == '<') {
 				if (l < 3) {
@@ -1692,7 +1690,6 @@ static result raw_expr(int l) {
 			checked_free(left.p);
 			break;
 		case '>':
-			if (q) goto base;
 			w++;
 			if (*w == '>') {
 				if (l < 3) {
@@ -1732,7 +1729,6 @@ static result raw_expr(int l) {
 			checked_free(left.p);
 			break;
 		case '&':
-			if (q) goto base;
 			lefti = f_int();
 			w++;
 			if (*w == '&') {
@@ -1757,7 +1753,6 @@ static result raw_expr(int l) {
 			f_replacei(lefti & righti);
 			break;
 		case '^':
-			if (q) goto base;
 			lefti = f_int();
 			w++;
 			if (l < 6) {
@@ -1770,7 +1765,6 @@ static result raw_expr(int l) {
 			f_replacei(lefti ^ righti);
 			break;
 		case '|':
-			if (q) goto base;
 			lefti = f_int();
 			w++;
 			if (*w == '|') {
@@ -1795,15 +1789,12 @@ static result raw_expr(int l) {
 			f_replacei(lefti | righti);
 			break;
 		case exprclose:
-			if (q) goto base;
 			w++;
 			ok;
 		case next:
 		case close:
-			if (q) goto base;
 			ok;
-		case open:	
-			if (q) goto base;
+		case open:
 			w++;
 			f_push();
 			tryor(raw_parse(), f_sweep());
@@ -1815,9 +1806,7 @@ static result raw_expr(int l) {
 		case '\\':
 			w++;
 			if (*w == '\0') ok;
-		base:
 		default:
-			if (q) f_pushc(*w);
 			w++;
 			break;
 		}
@@ -2922,6 +2911,13 @@ static inline void place_core_meth(void) {
 // MAIN
 
 int main(int argc, char* argv[], char* envp[]) {
+#ifdef DEBUG
+	printf("%i\n", argc);
+	for (int i = 0; i < argc; i++) {
+		printf("\"%s\" ", argv[i]);
+	}
+	printf("\n");
+#endif
 	start = clock();
 	if (argc == 1) {
 		printf("WALKER\n");
@@ -2966,8 +2962,6 @@ int main(int argc, char* argv[], char* envp[]) {
 	} else if (strcmp(argv[1], "e") == 0) {
 		w = argv[2];
 		code_start = argv[2];
-	} else if (strcmp(argv[1], "i")) {
-		
 	} else {
 		f_free();
 		flatmaps_free(&tokens);
